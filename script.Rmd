@@ -1,0 +1,387 @@
+---
+title: "Shark Attacks"
+author: "Benjamin Lott"
+date: "October 10, 2016"
+output: html_document
+---
+
+```{r message=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(plotly)
+library(magrittr)
+library(ggthemes)
+library(reshape2)
+library(stringr)
+library(readr)
+library(stringi)
+
+shark <- read.csv("../input/attacks.csv")
+shark %<>% tbl_df()
+'%!in%' <- function(x,y)!('%in%'(x,y))
+```
+
+```{r message=FALSE}
+shark %>% colnames() %>% dput()
+colnames(shark) <- c("Case Number", "Date", "Year", "Type", "Country", "Area", "Location", 
+"Activity", "Name", "Sex", "Age", "Injury", "Fatal_Y_N", "Time", 
+"Species", "Investigator or Source")
+shark$Country %<>% stri_enc_toutf8()
+shark$Area %<>% stri_enc_toutf8()
+
+temp <- shark %>% dplyr::filter(Year != 0)
+
+Tempy <- shark$Area
+Tempy %<>% tbl_df() %>% filter(value != "")
+Tempy %>% arrange(desc(value))
+
+```
+
+```{r message=FALSE, results='hide'}
+Temp1 <- Tempy$value %>% dput() %>% tbl_df()
+```
+
+```{r}
+Temp1$Match = 0
+Temp1$Match <- Temp1$value %>% str_extract("\\d")  
+Temp1 %<>% na.omit()
+
+
+temp %<>% filter(Area %!in% Temp1$value)
+```
+
+
+### NUMBER OF SHARK ATTACKS VS. YEAR (ORDERED BY FREQ) ###
+```{r}
+Freq_Shark_Year <- 
+tally(group_by(temp, Year)) %>%
+  filter(Year != c(5, 77, 500)) %>%
+  filter(Year > 1900) %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Year, -n), y = n, fill=n), stat="identity") + 
+  scale_fill_gradient("Count", low="blue", high = "orange") +
+  theme_solarized(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Number of Shark Attacks vs. Year", 
+    x = "Year", y = "Number of Shark Attacks", 
+    fill = "Count") 
+```
+
+```{r}
+ggplotly(Freq_Shark_Year)
+```
+
+### NUMBER OF SHARK ATTACKS VS. YEAR (ORDERED BY YEAR) ###  
+```{r}
+Year_Shark_Year <-
+tally(group_by(temp, Year)) %>%
+  filter(Year != c(5, 77, 500)) %>%
+  filter(Year > 1900) %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Year, Year),y = n, fill=n), stat="identity") + 
+  scale_fill_gradient("Count", low="blue", high = "orange") +
+  theme_solarized(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Number of Shark Attacks vs. Year", 
+    x = "Year", y = "Number of Shark Attacks", 
+    fill = "Count") 
+```
+
+```{r}
+ggplotly(Year_Shark_Year)
+```
+
+
+### Number of Shark Attacks vs. Area ###
+```{r message=FALSE}
+Shark_Year <- 
+tally(group_by(temp, Area)) %>%
+  filter(n > 8) %>%
+  filter(Area != "NA") %>%
+  filter(Area != "") %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Area, -n),y = n, fill=n), stat="identity") + 
+  scale_color_fivethirtyeight() +
+  theme_fivethirtyeight() +
+  scale_fill_gradient("Count", low="blue", high = "orange") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Number of Shark Attacks vs. Area", 
+       x = "Area", y = "Number of Shark Attacks", 
+       fill = "Count") 
+```
+
+```{r}
+ggplotly(Shark_Year) 
+```
+
+### FATALITIES ###  
+```{r}
+Yes_No <- c("Y", "N")
+Fatal <- tally(group_by(temp, Fatal_Y_N)) %>%
+  filter(Fatal_Y_N %in% Yes_No)
+
+Fatal$sum = sum(Fatal$n)
+Fatal$Percentage = 0
+for(i in 1:nrow(Fatal)){
+Fatal$Percentage[i] <- Fatal$n[i]/Fatal$sum[i]
+}
+```
+
+```{r}
+attach(Fatal)
+ax <- list(
+  zeroline=FALSE,
+  showline=FALSE,
+  showticklabels=FALSE,
+  showgrid=FALSE
+)
+
+plot_ly(Fatal, labels=Fatal_Y_N, values = Percentage, type="pie", hole=0.4, showlegend = F) %>%
+  layout(title = "Shark Attack Fatalities by Percentage", xaxis=ax, yaxis=ax)
+```
+
+```{r message=FALSE, tidy=TRUE, results='hide'}
+attack <- temp %>% select(c(Area, Fatal_Y_N))
+attack$Fatal <- attack$Fatal_Y_N
+attack %<>% filter(Area != "")
+
+attack %<>% arrange(Area)
+
+
+overall_tally <- tally(group_by(attack, Area))
+overall_tally %<>% filter(n > 30)
+names <- overall_tally$Area %>% unique() %>% dput() %>% invisible()
+
+names %<>% tbl_df()
+area_attack_fatal <- tally(group_by(attack, Area, Fatal))
+
+```
+
+```{r}
+area_attack_fatal1 <- area_attack_fatal
+area_attack_fatal1 %<>% select(c(Area, Fatal, n))
+area_attack_fatal1 %<>% filter(Area %in% names$value)
+area_attack_fatal1 %<>% filter(Fatal %in% Yes_No)
+
+
+
+```
+
+```{r}
+Attack_Area <-
+area_attack_fatal1 %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Area, -n), y=n, fill=Fatal), position='dodge', stat='identity') +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(plot.title = element_text(face = "bold")) +
+  labs(title = "Number of Shark Bites vs. Area", 
+    x = "Area", y = "Number of Shark Bites")
+```
+
+```{r}
+ggplotly(Attack_Area)
+```
+
+
+#NUMBER OF SHARK ATTACKS VS. COUNTRY VS. FATALITY 
+```{r message=FALSE, results='hide'}
+attack_by_country <- temp %>% select(c(Country, Fatal_Y_N))
+attack_by_country %<>%  filter(Fatal_Y_N %in% Yes_No) 
+attack_by_country$Fatal <- attack_by_country$Fatal_Y_N
+attack_by_country %<>% select(-Fatal_Y_N)
+attack_by_country %<>% remove_missing()
+attack_by_country %<>% filter(Country != "")
+
+attack_by_country %<>% arrange(Country)
+
+
+overall_tally_country <- tally(group_by(attack_by_country, Country))
+overall_tally_country %<>% filter(n > 30)
+names_country <- overall_tally_country$Country %>% unique() %>% dput() 
+
+names_country %<>% tbl_df()
+Country_attack_by_country_fatal <- tally(group_by(attack_by_country, Country, Fatal))
+```
+
+```{r}
+Country_attack_by_country_fatal %<>% filter(Country %in% names_country$value)
+
+Country_attack_by_country_fatal1 <- Country_attack_by_country_fatal
+Country_attack_by_country_fatal1 %<>% select(c(Country, Fatal, n))
+Country_attack_by_country_fatal1$sum = 0
+for(i in 1:nrow(Country_attack_by_country_fatal1)){
+Country_attack_by_country_fatal1$sum[i] <- Country_attack_by_country_fatal$n[i] + Country_attack_by_country_fatal$n[i+1]
+}
+for(i in 1:nrow(Country_attack_by_country_fatal1)){
+  if(i %% 2 == 0){
+    Country_attack_by_country_fatal1$sum[i] <- Country_attack_by_country_fatal1$sum[i-1]
+  }
+}
+Shark_Fatal_Country <- Country_attack_by_country_fatal1 
+Shark_Fatal_Country$Survive = 0
+for(i in 1:nrow(Shark_Fatal_Country)){
+  Shark_Fatal_Country$Survive[i] <- Shark_Fatal_Country$n[i]/Shark_Fatal_Country$sum[i]
+}
+Shark_Fatal_Country$Death = 0
+for(i in 1:nrow(Shark_Fatal_Country)){
+  if(i %% 2 == 0){
+  Shark_Fatal_Country$Death[i] <- 1-Shark_Fatal_Country$Survive[i-1]
+  }
+}
+```
+
+## Chance of Dying from a Shark Attack by Country
+```{r}
+Shark_Fatal_Country_Plot_Die <- Shark_Fatal_Country %>%
+  filter(Fatal == "Y") %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Country, -Death), y=Death, fill=Death, text=paste("Number of Deaths: ", n, sep="")), stat='identity') +
+  scale_fill_gradient("Count", low="blue", high = "red") +
+  theme_solarized_2(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90))+
+  labs(title = "Percent Chance of Death from Shark Attack (By Country)", 
+    x = "Country", y = "Percent Chance of Death from Shark Attack")
+```
+
+```{r}
+ggplotly(Shark_Fatal_Country_Plot_Die)
+```
+
+## Chance of Surviving a Shark Attack by Country
+
+```{r}
+Shark_Fatal_Country_Plot_Survive <- Shark_Fatal_Country %>%
+  filter(Fatal == "N") %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Country, -Survive), y=Survive, fill=Survive, text=paste("Number of Survivals: ", n, sep="")), stat='identity') +
+  scale_fill_gradient("Count", low="red", high = "blue") +
+  theme_solarized_2(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Percent Chance of Survival By Shark Attack (By Country)", 
+    x = "Country", y = "Survival Rate of Shark Attack (in %)")
+```
+
+```{r}
+ggplotly(Shark_Fatal_Country_Plot_Survive)
+```
+
+```{r}
+Attack_Country <-
+Country_attack_by_country_fatal1 %>% 
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Country, -n), y=n, fill=Fatal), position='dodge', stat='identity') +
+  theme_solarized_2(light = FALSE) +
+  scale_colour_solarized("blue") +
+  theme(axis.text.x = element_text(angle = 90))+
+  labs(title = "Number of Shark Bites: Fatal and Non Fatal", 
+    x = "Country", y = "Number of Shark Bites", 
+    fill = "Fatal?")
+```
+
+```{r}
+ggplotly(Attack_Country)
+```
+
+
+
+# Number of Shark Attacks vs Age of Victims
+```{r}
+Attack_Age <-
+tally(group_by(temp, Age)) %>%
+  filter(Age != "") %>%
+  filter(n > 5) %>%
+  filter(n != 2568) %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Age, -n), y=n, fill=n), stat="identity") +
+  scale_fill_gradient("Count", low="blue", high = "orange") +
+  theme_solarized(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Number of Shark Attacks vs. Age of Victim", 
+       x = "Age of Victim", y = "Number of Shark Attacks", 
+       fill = "Count")
+```
+
+```{r}
+ggplotly(Attack_Age)
+```
+
+# Number of Fatalities vs. Number of Non Fatalities for Each Activity
+```{r message=FALSE, results='hide'}
+shark %<>% filter(Fatal_Y_N == c("Y", "N")) 
+top_30_activity <- tally(group_by(shark,Activity)) %>%
+  arrange(desc(n)) %>%
+  filter(Activity != "") %>%
+  select(Activity,n)
+top_30_activity %<>% slice(1:30)
+activities <- top_30_activity$Activity %>% unique() %>% dput()
+activities %<>% tbl_df()
+
+Activity_Fatal <- tally(group_by(shark,Activity,Fatal_Y_N)) %>%
+  arrange(desc(n)) %>%
+  filter(Activity != "") 
+
+Activity_Fatal %<>% filter(Activity %in% activities$value)
+
+Activity_Fatal_Plot <- Activity_Fatal %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Activity, -n), y=n, fill=Fatal_Y_N), position ='dodge', stat='identity') +
+  theme_solarized_2(light = FALSE) +
+  scale_colour_solarized("blue") +
+  theme(axis.text.x = element_text(angle = 90))  +
+  theme(plot.title = element_text(face = "bold")) +
+  labs(title = "Shark Attack Fatalities with Activity", 
+       x = "Activity", y = "Number of Shark Attacks",
+    fill = "Fatal")
+```
+
+```{r}
+ggplotly(Activity_Fatal_Plot)
+```
+
+# Percent of Fatal Shark Attacks per each Activity
+```{r message=FALSE}
+Yes_Fatal <- Activity_Fatal 
+Yes_Fatal %<>% filter(Fatal_Y_N == "Y")
+No_Fatal <- Activity_Fatal
+No_Fatal %<>% filter(Fatal_Y_N == "N")
+
+Both_Fatal <- left_join(Yes_Fatal, No_Fatal, by ="Activity")
+Both_Fatal %>% names()
+names(Both_Fatal) <- c("Activity","Fatal_Y_N.x", "Number_of_Fatalities","Fatal_Y_N.y", "Number_of_Non-Fatalities")
+Both_Fatal %<>% remove_missing()
+Both_Fatal %<>% select(-c(Fatal_Y_N.x, Fatal_Y_N.y))
+
+Both_Fatal$Percent_Fatality = 0
+for(i in 1:nrow(Both_Fatal)){
+  Both_Fatal[i, "Percent_Fatality"] <- Both_Fatal[i, "Number_of_Fatalities"]/(Both_Fatal[i, "Number_of_Fatalities"] + Both_Fatal[i, "Number_of_Non-Fatalities"])
+}
+
+
+Bar_Fatality_Percent <- Both_Fatal %>%
+  ggplot() +
+  geom_bar(mapping = aes(reorder(Activity, -Percent_Fatality), y=Percent_Fatality, fill = Percent_Fatality), stat="identity") +
+  scale_fill_gradient("Count", low="yellow", high = "red") +
+  theme_solarized(light = FALSE) +
+  scale_colour_solarized("red") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(plot.title = element_text(face = "bold")) +
+    labs(title = "Percent Frequency of Fatality with Shark Attacks in Relation to Activity", 
+    y = "Fatality Percent", fill = "Percent Fatality") +
+  theme(plot.title = element_text(size = 11)) +
+  labs(title = "Percent Fatality with Shark Attacks in
+  Relation to Activity") +
+  labs(x = "Activity")
+```
+
+```{r}
+ggplotly(Bar_Fatality_Percent)
+```
+<br>
+<br>
+<br>
