@@ -338,3 +338,17 @@ Death_Rate_Place%>%
   xlab("Year") + ylab("rate") + theme(legend.position = "none")
 ```
 ##It seemed that the rate of death in florida was terrifying at the early 20th centurary, but gradually controlled. However, the attacks in California did not seemed to be a big problem before 1950s, but has been quite terrifying during the 1980s. I doubt if that area was greatly developed. For the rest three places, I can't find anything make sense.
+```{r}
+attacks%>%
+  filter(Country%in%top_countries$Country)%>%
+  group_by(Year,Country)%>%
+  mutate(n=1)%>%
+  summarise(attack_of_country=sum(n))%>%
+  left_join(tourism,by=c("Country","Year"))%>%
+  na.omit()%>%
+  mutate(rate=attack_of_country/International_Tourism)%>%
+  ggplot(aes(Year, rate, colour = Country)) + geom_point() + geom_line() +
+  facet_wrap( ~ Country, nrow = 4) + ggtitle("Rate of death over years with tourists") +
+  xlab("Year") + ylab("Number") + theme(legend.position = "none")
+```
+
